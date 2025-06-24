@@ -1,0 +1,65 @@
+# This workflow will build a Java project with Ant
+# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-java-with-ant
+
+name: Auto
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "30 22 * * *" # 北京时间上午06:30
+
+jobs:
+  build:
+    env:
+      COOKIE: ${{ secrets.COOKIE }}
+      SERVER_CHAN: ${{ secrets.SERVER_CHAN }}
+      DINGTALK_WEBHOOK: ${{ secrets.DINGTALK_WEBHOOK }}
+      WXWORK_WEBHOOK: ${{ secrets.WXWORK_WEBHOOK }}
+      TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+      TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
+      GOTIFY_URL: ${{ secrets.GOTIFY_URL }}
+      GOTIFY_APP_TOKEN: ${{ secrets.GOTIFY_APP_TOKEN }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up JDK 8
+        uses: actions/setup-java@v3
+        with:
+          java-version: '8'
+          distribution: 'temurin'
+      - name: Build with Maven
+        run: |
+          mvn compile
+          mvn -B exec:java \
+          -Dexec.mainClass=cloud.ohiyou.Main \
+          -Dexec.cleanupDaemonThreads=false
+
+  redeploy: # 新添加的任务
+    name: Redeploy Choreo
+    runs-on: ubuntu-latest
+    needs: build # 确保 build 任务完成后再运行 redeploy 任务
+
+    steps:
+      - uses: actions/checkout@v4.0.0
+
+      - name: Create timestamp file
+        run: |
+          DATE=$(date "+%Y/%m/%d %H:%M:%S")
+          echo "${DATE}" > timestamp.txt
+
+      - name: Commit timestamp file
+        uses: stefanzweifel/git-auto-commit-action@v4.16.0
+        with:
+          commit_message: "Update timestamp: ${{ env.DATE }}"
+          files: timestamp.txt
+          #  可以选择推送到不同分支，避免影响主分支
+          # branch: timestamps 
+
+      - name: Delete old workflow runs
+        uses: MajorScruffy/delete-old-workflow-runs@v0.3.0
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        with:
+          repository: ${{ github.repository }}
+          older-than-seconds: 3600
